@@ -296,6 +296,41 @@
             box-shadow: 0 0 20px rgba(255, 180, 0, 0.8);
         }
 
+        /* ===== CRASH OVERLAY ===== */
+        #crash-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 30;
+            pointer-events: none;
+            background: rgba(200, 0, 0, 0.25);
+            backdrop-filter: blur(3px);
+        }
+        #crash-text {
+            font-family: 'Black Ops One', cursive;
+            font-size: 14vw;
+            color: #ff2200;
+            text-shadow: 0 0 40px #ff4400, 0 0 80px #ff0000;
+            animation: crash-shake 0.5s ease-in-out;
+        }
+        #crash-subtitle {
+            font-size: 3vw;
+            color: #fff;
+            text-shadow: 0 0 10px #fff;
+            margin-top: 10px;
+        }
+        @keyframes crash-shake {
+            0%, 100% { transform: translateX(0) rotate(0deg); }
+            20% { transform: translateX(-25px) rotate(-4deg); }
+            40% { transform: translateX(25px) rotate(4deg); }
+            60% { transform: translateX(-15px) rotate(-2deg); }
+            80% { transform: translateX(15px) rotate(2deg); }
+        }
+
         /* ===== WRONG-WAY INDICATOR ===== */
         #wrong-way {
             position: absolute;
@@ -490,6 +525,12 @@
     <!-- Reward Notification -->
     <div id="reward-notification"></div>
 
+    <!-- Crash Overlay -->
+    <div id="crash-overlay">
+        <div id="crash-text">💥 CRASH! 💥</div>
+        <div id="crash-subtitle">Starting over...</div>
+    </div>
+
     <!-- Active Effect Indicators -->
     <div id="active-effects"></div>
 
@@ -532,6 +573,7 @@
             <p><span class="key">S</span> or <span class="key">↓</span> to Brake/Reverse</p>
             <p><span class="key">A</span> / <span class="key">D</span> or <span class="key">←</span> / <span class="key">→</span> to Steer inside the tube</p>
             <p><span class="key">SPACE</span> to fire <span style="color:#00ffcc">Nitro Boost ⚡</span></p>
+            <p style="color:#ff4444; margin-top:10px;">⚠ Avoid 🥦 Broccoli &amp; 🍅 Tomatoes — they crash you!</p>
         </div>
     </div>
 
@@ -551,10 +593,10 @@
 
         // Pasta types: stats for each pasta racer
         const PASTA_TYPES = {
-            macaroni: { name: 'Macaroni', maxSpeed: 0.0003,  accel: 0.000002,  handling: 0.05, bodyColor: 0xffcc22 },
-            fusilli:  { name: 'Fusilli',  maxSpeed: 0.00027, accel: 0.0000022, handling: 0.07, bodyColor: 0xffaa33 },
-            farfalle: { name: 'Farfalle', maxSpeed: 0.00032, accel: 0.0000028, handling: 0.05, bodyColor: 0xffdd55 },
-            penne:    { name: 'Penne',    maxSpeed: 0.00036, accel: 0.000002,  handling: 0.04, bodyColor: 0xffe8aa },
+            macaroni: { name: 'Macaroni', maxSpeed: 0.00048,  accel: 0.0000032,  handling: 0.05, bodyColor: 0xffcc22 },
+            fusilli:  { name: 'Fusilli',  maxSpeed: 0.000432, accel: 0.0000036,  handling: 0.07, bodyColor: 0xffaa33 },
+            farfalle: { name: 'Farfalle', maxSpeed: 0.00051,  accel: 0.0000045,  handling: 0.05, bodyColor: 0xffdd55 },
+            penne:    { name: 'Penne',    maxSpeed: 0.00058,  accel: 0.0000032,  handling: 0.04, bodyColor: 0xffe8aa },
         };
         let selectedPasta = 'macaroni';
         const SPEED_REWARD_KEY = 'macaroniRacerSpeedReward';
@@ -585,6 +627,13 @@
             farfalle: { label: '🦋 HANDLING UP!',   color: '#ff88ff', duration: 8000 }
         };
         let activeEffects = {}; // keyed by effect type
+
+        // Obstacle system
+        let obstacleItems = [];
+        const OBSTACLE_COUNT = 8;
+        const OBSTACLE_TYPES_LIST = ['broccoli', 'tomato'];
+        const OBSTACLE_HIT_RADIUS = 11;  // collision radius in world-units (obstacle mesh scaled ×3, ~5-unit effective radius)
+        let crashLock = false;           // prevent re-triggering during crash anim
 
         // Nitro constants
         const NITRO_MAX = 1.0;
@@ -685,6 +734,9 @@
 
             // 9. Spawn pasta reward items along the track
             spawnRewards();
+
+            // 10. Spawn obstacle items along the track
+            spawnObstacles();
 
             // 10. Show speed reward badge if earned
             if (localStorage.getItem(SPEED_REWARD_KEY) === 'true') {
@@ -1038,7 +1090,7 @@
                 maxSpeed: isPlayer
                     ? (PASTA_TYPES[pastaType] || PASTA_TYPES.macaroni).maxSpeed
                       * (localStorage.getItem(SPEED_REWARD_KEY) === 'true' ? SPEED_REWARD_BONUS : 1.0)
-                    : 0.00028,
+                    : 0.00042,
                 accel: isPlayer ? (PASTA_TYPES[pastaType] || PASTA_TYPES.macaroni).accel : 0.000002,
                 friction: 0.98,
                 handling: isPlayer ? (PASTA_TYPES[pastaType] || PASTA_TYPES.macaroni).handling : 0.05,
@@ -1226,6 +1278,131 @@
                 scene.add(mesh);
                 rewardItems.push({ mesh, t, theta, type, collected: false, respawnAt: null });
             }
+        }
+
+        // --- Obstacle System ---
+        function createObstacleMesh(type) {
+            const group = new THREE.Group();
+
+            if (type === 'broccoli') {
+                const stalkMat = new THREE.MeshStandardMaterial({ color: 0x5d8a3c, roughness: 0.6 });
+                const floretMat = new THREE.MeshStandardMaterial({ color: 0x226622, roughness: 0.7 });
+
+                // Stalk
+                const stalkGeo = new THREE.CylinderGeometry(0.3, 0.45, 2.2, 8);
+                const stalk = new THREE.Mesh(stalkGeo, stalkMat);
+                stalk.position.y = -1.1;
+                group.add(stalk);
+
+                // Main floret dome
+                const topGeo = new THREE.SphereGeometry(1.5, 10, 8);
+                const top = new THREE.Mesh(topGeo, floretMat);
+                top.position.y = 0.6;
+                group.add(top);
+
+                // Sub-florets around main dome
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i / 5) * Math.PI * 2;
+                    const subGeo = new THREE.SphereGeometry(0.75, 8, 7);
+                    const sub = new THREE.Mesh(subGeo, floretMat);
+                    sub.position.set(Math.cos(angle) * 1.1, 0.2, Math.sin(angle) * 1.1);
+                    group.add(sub);
+                }
+
+                // Green warning glow
+                const glow = new THREE.PointLight(0x00cc44, 2.5, 22);
+                group.add(glow);
+
+            } else { // tomato
+                const tomatoMat = new THREE.MeshStandardMaterial({
+                    color: 0xff2200, emissive: 0x550000, emissiveIntensity: 0.35, roughness: 0.4
+                });
+                const greenMat = new THREE.MeshStandardMaterial({ color: 0x228800, roughness: 0.5 });
+
+                // Main body
+                const bodyGeo = new THREE.SphereGeometry(1.6, 14, 12);
+                const body = new THREE.Mesh(bodyGeo, tomatoMat);
+                group.add(body);
+
+                // Slight flattening highlight ridge
+                const ridgeGeo = new THREE.TorusGeometry(0.9, 0.18, 6, 20);
+                const ridge = new THREE.Mesh(ridgeGeo, tomatoMat);
+                ridge.rotation.x = Math.PI / 2;
+                ridge.position.y = 0.1;
+                group.add(ridge);
+
+                // Stem
+                const stemGeo = new THREE.CylinderGeometry(0.15, 0.1, 1.0, 6);
+                const stem = new THREE.Mesh(stemGeo, greenMat);
+                stem.position.y = 1.9;
+                group.add(stem);
+
+                // Leaves (calyx)
+                for (let i = 0; i < 4; i++) {
+                    const angle = (i / 4) * Math.PI * 2;
+                    const leafGeo = new THREE.ConeGeometry(0.45, 1.1, 4);
+                    const leaf = new THREE.Mesh(leafGeo, greenMat);
+                    leaf.position.set(Math.cos(angle) * 0.55, 1.65, Math.sin(angle) * 0.55);
+                    leaf.rotation.z = Math.PI / 3.5;
+                    leaf.rotation.y = angle;
+                    group.add(leaf);
+                }
+
+                // Red warning glow
+                const glow = new THREE.PointLight(0xff2200, 2.5, 22);
+                group.add(glow);
+            }
+
+            group.scale.set(3, 3, 3);
+            return group;
+        }
+
+        function spawnObstacles() {
+            obstacleItems.forEach(o => { if (o.mesh) scene.remove(o.mesh); });
+            obstacleItems = [];
+            for (let i = 0; i < OBSTACLE_COUNT; i++) {
+                // t: start at 0.07 (past finish line), span 0.86 of track, with ±0.04 jitter
+                const t = 0.07 + (i / OBSTACLE_COUNT) * 0.86 + (Math.random() - 0.5) * 0.04;
+                const theta = Math.PI / 2 + (Math.random() - 0.5) * 2.8;
+                const type = OBSTACLE_TYPES_LIST[i % OBSTACLE_TYPES_LIST.length];
+                const mesh = createObstacleMesh(type);
+                placeRewardMesh(mesh, t, theta); // same placement logic as rewards
+                scene.add(mesh);
+                obstacleItems.push({ mesh, t, theta, type });
+            }
+        }
+
+        function checkObstacleCollisions() {
+            if (gameState !== 'playing' || crashLock) return;
+            obstacleItems.forEach(obstacle => {
+                if (obstacle.mesh.position.distanceTo(playerCar.mesh.position) < OBSTACLE_HIT_RADIUS) {
+                    triggerCrash();
+                }
+            });
+        }
+
+        function triggerCrash() {
+            if (crashLock) return;
+            crashLock = true;
+            // 'crashed' state: updatePhysics() returns early (guards on 'playing'),
+            // so no physics or collision checks run during the 2-second crash animation.
+            // After the timeout, resetRacers() + runCountdown() transition to 'countdown'.
+            gameState = 'crashed';
+
+            const overlay = document.getElementById('crash-overlay');
+            if (overlay) {
+                overlay.style.display = 'flex';
+                // Re-trigger shake animation (force reflow to restart the CSS animation)
+                const txt = document.getElementById('crash-text');
+                if (txt) { txt.style.animation = 'none'; void txt.offsetWidth; txt.style.animation = ''; }
+            }
+
+            setTimeout(() => {
+                if (overlay) overlay.style.display = 'none';
+                crashLock = false;
+                resetRacers();
+                runCountdown();
+            }, 2000);
         }
 
         function checkRewardCollisions() {
@@ -1525,6 +1702,9 @@
 
         function startGame() {
             startScreen.style.display = 'none';
+            crashLock = false;
+            const crashOverlay = document.getElementById('crash-overlay');
+            if (crashOverlay) crashOverlay.style.display = 'none';
 
             // Init audio on first user interaction
             initAudio();
@@ -1550,6 +1730,7 @@
             allRacers[0] = playerCar;
 
             resetRacers();
+            spawnObstacles(); // re-randomise obstacle positions each race
             runCountdown();
         }
 
@@ -1713,6 +1894,9 @@
 
             // 6. Check pasta reward pickups
             checkRewardCollisions();
+
+            // 7. Check obstacle collisions (broccoli & tomatoes)
+            checkObstacleCollisions();
 
             // 7. Update UI
             updateEngineSound(playerCar.speed, playerCar.maxSpeed, playerCar.nitroActive);
@@ -1954,6 +2138,16 @@
                     r.mesh.rotation.y = nowMs * 0.002 + i * 1.3;
                     const pulse = 1 + Math.sin(nowMs * 0.003 + i * 0.8) * 0.08;
                     r.mesh.scale.setScalar(2.8 * pulse);
+                }
+            });
+
+            // Animate obstacle items — wobble and warn the player
+            obstacleItems.forEach((o, i) => {
+                if (o.mesh) {
+                    o.mesh.rotation.y = nowMs * 0.0015 + i * 2.1;
+                    // Ominous pulsing scale
+                    const pulse = 1 + Math.sin(nowMs * 0.004 + i * 1.2) * 0.12;
+                    o.mesh.scale.setScalar(3 * pulse);
                 }
             });
 
