@@ -198,8 +198,147 @@
             .controls-info { display: none; }
             #mobile-controls { display: flex; }
             .hud-top { padding: 10px; }
-            .hud-bottom { padding-bottom: 120px; } /* Above touch controls */
-            .speedometer { width: 180px; }
+            .hud-bottom { padding-bottom: 130px; } /* Above touch controls */
+            .speedometer { width: 160px; }
+            .nitro-container { width: 120px; }
+        }
+
+        /* ===== COUNTDOWN OVERLAY ===== */
+        #countdown-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 25;
+            pointer-events: none;
+        }
+        #countdown-number {
+            font-family: 'Black Ops One', cursive;
+            font-size: 22vw;
+            color: #ffcc00;
+            text-shadow: 0 0 40px #ff6600, 0 0 80px #ff0000;
+            animation: countdown-pulse 0.85s ease-out forwards;
+        }
+        @keyframes countdown-pulse {
+            0%   { transform: scale(1.6); opacity: 0; }
+            30%  { opacity: 1; }
+            100% { transform: scale(1);   opacity: 0.9; }
+        }
+        #countdown-number.go {
+            color: #00ffcc;
+            text-shadow: 0 0 40px #00ffff, 0 0 80px #00ff88;
+            font-size: 14vw;
+        }
+
+        /* ===== LAP NOTIFICATION ===== */
+        #lap-notification {
+            position: absolute;
+            top: 42%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Black Ops One', cursive;
+            font-size: 6vw;
+            color: #00ffcc;
+            text-shadow: 0 0 20px #00ffff, 0 0 40px #00ff88;
+            display: none;
+            pointer-events: none;
+            z-index: 20;
+            text-align: center;
+            white-space: nowrap;
+        }
+        @keyframes lap-flash {
+            0%   { transform: translate(-50%, -50%) scale(1.4); opacity: 0; }
+            15%  { opacity: 1; }
+            70%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+        }
+
+        /* ===== NITRO BAR ===== */
+        .hud-bottom {
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        .nitro-container {
+            background: rgba(0, 15, 40, 0.8);
+            border: 2px solid #00ff88;
+            width: 250px;
+            height: 22px;
+            border-radius: 11px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 0 12px rgba(0, 255, 136, 0.5);
+        }
+        .nitro-fill {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, #00cc66, #00ffcc);
+            transition: width 0.08s;
+        }
+        .nitro-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 11px;
+            color: #fff;
+            white-space: nowrap;
+            letter-spacing: 1px;
+        }
+        .nitro-container.active .nitro-fill {
+            background: linear-gradient(90deg, #ffcc00, #ff6600);
+            box-shadow: 0 0 15px rgba(255, 180, 0, 0.9) inset;
+        }
+        .nitro-container.active {
+            border-color: #ffcc00;
+            box-shadow: 0 0 20px rgba(255, 180, 0, 0.8);
+        }
+
+        /* ===== WRONG-WAY INDICATOR ===== */
+        #wrong-way {
+            position: absolute;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Black Ops One', cursive;
+            font-size: 6vw;
+            color: #ff2200;
+            text-shadow: 0 0 20px #ff4400;
+            display: none;
+            pointer-events: none;
+            z-index: 20;
+            animation: blink 0.6s step-start infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* ===== END SCREEN ===== */
+        .results-board {
+            background: rgba(0,0,0,0.55);
+            padding: 15px 35px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.2);
+            margin-bottom: 24px;
+        }
+        .results-row {
+            padding: 6px 0;
+            font-size: 20px;
+            color: #ccc;
+        }
+        .results-row.you { color: #ffcc00; font-weight: bold; }
+        .results-row .you-tag { color: #00ffcc; }
+        .results-time {
+            font-size: 20px;
+            color: #aaa;
+            margin-bottom: 28px;
+        }
+
+        /* Touch nitro button */
+        #btn-nitro {
+            background: rgba(0, 255, 136, 0.3);
+            border-color: #00ff88;
+            font-size: 18px;
         }
     </style>
     <!-- Include Three.js -->
@@ -224,6 +363,10 @@
                 <div class="speed-bar" id="speed-bar"></div>
                 <div class="speed-text"><span id="speed-val">0</span> KM/H</div>
             </div>
+            <div class="nitro-container" id="nitro-container">
+                <div class="nitro-fill" id="nitro-fill"></div>
+                <div class="nitro-label">⚡ NITRO [SPACE]</div>
+            </div>
         </div>
     </div>
 
@@ -234,9 +377,21 @@
         </div>
         <div class="touch-btn-group">
             <div class="touch-btn" id="btn-brake">B</div>
+            <div class="touch-btn" id="btn-nitro">⚡</div>
             <div class="touch-btn" id="btn-accel" style="background: rgba(255, 102, 0, 0.4); border-color: #ff6600;">A</div>
         </div>
     </div>
+
+    <!-- Countdown Overlay -->
+    <div id="countdown-overlay">
+        <div id="countdown-number">3</div>
+    </div>
+
+    <!-- Lap Notification -->
+    <div id="lap-notification"></div>
+
+    <!-- Wrong-Way Indicator -->
+    <div id="wrong-way">⚠ WRONG WAY ⚠</div>
 
     <div id="start-screen">
         <h1>Macaroni<br>Tube Racer</h1>
@@ -246,6 +401,7 @@
             <p><span class="key">W</span> or <span class="key">↑</span> to Accelerate</p>
             <p><span class="key">S</span> or <span class="key">↓</span> to Brake/Reverse</p>
             <p><span class="key">A</span> / <span class="key">D</span> or <span class="key">←</span> / <span class="key">→</span> to Steer inside the tube</p>
+            <p><span class="key">SPACE</span> to fire <span style="color:#00ffcc">Nitro Boost ⚡</span></p>
         </div>
     </div>
 
@@ -258,9 +414,16 @@
         const TUBE_RADIAL_SEGMENTS = 16;
         let totalTrackLength = 0;
         
-        let gameState = 'start'; // start, playing, finished
+        let gameState = 'start'; // start, countdown, playing, finished
         let startTime = 0;
         let totalLaps = 3;
+        let lapNotifTimeout = null;
+
+        // Nitro constants
+        const NITRO_MAX = 1.0;
+        const NITRO_DRAIN = 0.012;   // per frame while active
+        const NITRO_REGEN = 0.0015;  // per frame while inactive
+        const NITRO_BOOST = 1.9;     // speed multiplier when active
 
         // Entities
         let playerCar = null;
@@ -268,7 +431,7 @@
         let allRacers = [];
 
         // Input state
-        const keys = { w: false, a: false, s: false, d: false, up: false, down: false, left: false, right: false };
+        const keys = { w: false, a: false, s: false, d: false, up: false, down: false, left: false, right: false, space: false };
         
         // DOM Elements
         const posUI = document.getElementById('position');
@@ -278,6 +441,12 @@
         const speedVal = document.getElementById('speed-val');
         const startScreen = document.getElementById('start-screen');
         const startBtn = document.getElementById('start-btn');
+        const countdownOverlay = document.getElementById('countdown-overlay');
+        const countdownNumber = document.getElementById('countdown-number');
+        const lapNotif = document.getElementById('lap-notification');
+        const nitroContainer = document.getElementById('nitro-container');
+        const nitroFill = document.getElementById('nitro-fill');
+        const wrongWay = document.getElementById('wrong-way');
 
         // --- Init Function ---
         function init() {
@@ -400,32 +569,68 @@
             const tubeMesh = new THREE.Mesh(tubeGeo, glassMat);
             scene.add(tubeMesh);
 
+            // Outer tube wire for extra depth
+            const outerWireGeo = new THREE.TubeGeometry(trackCurve, TRACK_SEGMENTS, TRACK_RADIUS + 0.6, TUBE_RADIAL_SEGMENTS, true);
+            const outerWireMat = new THREE.MeshBasicMaterial({
+                color: 0x002244, transparent: true, opacity: 0.18,
+                side: THREE.FrontSide, depthWrite: false
+            });
+            scene.add(new THREE.Mesh(outerWireGeo, outerWireMat));
+
             // Add Neon Lines along the tube to simulate energy/speed
-            const lineCount = 4;
+            const lineCount = 6;
+            const lineColors = [0x00ffff, 0xff6600, 0x00ff88, 0xff00ff, 0x00ffff, 0xffcc00];
             for(let i=0; i<lineCount; i++) {
                 const lineGeo = createNeonLineGeometry(trackCurve, TRACK_RADIUS, i * (Math.PI*2/lineCount));
                 const lineMat = new THREE.MeshBasicMaterial({ 
-                    color: i%2===0 ? 0x00ffff : 0xff6600, 
+                    color: lineColors[i],
                     transparent: true,
-                    opacity: 0.8
+                    opacity: 0.7
                 });
                 const lineMesh = new THREE.Mesh(lineGeo, lineMat);
                 scene.add(lineMesh);
             }
 
-            // Track Rings
+            // Track Rings (alternating colors)
+            const ringColors = [0x0055ff, 0x00aaff, 0x0033cc];
             for(let i=0; i<TRACK_SEGMENTS; i+=40) {
                 const pt = trackCurve.getPointAt(i/TRACK_SEGMENTS);
                 const tangent = trackCurve.getTangentAt(i/TRACK_SEGMENTS);
                 
                 const ringGeo = new THREE.TorusGeometry(TRACK_RADIUS + 2, 0.5, 8, 32);
-                const ringMat = new THREE.MeshBasicMaterial({ color: 0x4444ff });
+                const ringMat = new THREE.MeshBasicMaterial({ color: ringColors[Math.floor(i/40) % ringColors.length] });
                 const ring = new THREE.Mesh(ringGeo, ringMat);
                 
                 ring.position.copy(pt);
                 ring.lookAt(pt.clone().add(tangent));
                 scene.add(ring);
             }
+
+            // ===== Start / Finish Line =====
+            const sfPoint   = trackCurve.getPointAt(0.001);
+            const sfTangent = trackCurve.getTangentAt(0.001);
+
+            // Glowing white ring
+            const sfGeo = new THREE.TorusGeometry(TRACK_RADIUS + 1, 2, 8, 48);
+            const sfMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+            const sfRing = new THREE.Mesh(sfGeo, sfMat);
+            sfRing.position.copy(sfPoint);
+            sfRing.lookAt(sfPoint.clone().add(sfTangent));
+            scene.add(sfRing);
+
+            // Green finish ring slightly offset
+            const sfGeo2 = new THREE.TorusGeometry(TRACK_RADIUS + 1, 1.2, 8, 48);
+            const sfMat2 = new THREE.MeshBasicMaterial({ color: 0x00ff44 });
+            const sfRing2 = new THREE.Mesh(sfGeo2, sfMat2);
+            const sfPt2 = sfPoint.clone().addScaledVector(sfTangent, 3);
+            sfRing2.position.copy(sfPt2);
+            sfRing2.lookAt(sfPt2.clone().add(sfTangent));
+            scene.add(sfRing2);
+
+            // Point light at start/finish for visibility
+            const sfLight = new THREE.PointLight(0x00ff44, 3, 80);
+            sfLight.position.copy(sfPoint);
+            scene.add(sfLight);
         }
 
         function createNeonLineGeometry(curve, radius, angleOffset) {
@@ -627,14 +832,19 @@
 
             group.add(macGroup);
 
-            // Point Light for Player Kart
-            if (isPlayer) {
-                const glow = new THREE.PointLight(0x00ffff, 1, 20);
-                glow.position.set(0, 2, 0);
-                group.add(glow);
-            }
+            // Body glow light (for all karts)
+            const bodyGlow = new THREE.PointLight(isPlayer ? 0x00ffff : mainColor, isPlayer ? 1 : 0.5, 18);
+            bodyGlow.position.set(0, 2, 0);
+            bodyGlow.name = 'bodyGlow';
+            group.add(bodyGlow);
 
-            // Engine Particle emitter spot (placeholder)
+            // Exhaust flame light (behind kart)
+            const exhaustLight = new THREE.PointLight(0xff6600, 0, 12);
+            exhaustLight.position.set(0, 1.5, -7);
+            exhaustLight.name = 'exhaustLight';
+            group.add(exhaustLight);
+
+            // Engine Particle emitter spot
             const exhaustGeo = new THREE.CylinderGeometry(0.5, 0.8, 1, 16);
             exhaustGeo.rotateX(Math.PI/2);
             const exhaust = new THREE.Mesh(exhaustGeo, new THREE.MeshStandardMaterial({color:0x555555}));
@@ -652,10 +862,14 @@
                 lap: 1,
                 isPlayer: isPlayer,
                 lateralSpeed: 0,
-                maxSpeed: isPlayer ? 0.0003 : 0.00028, // speed relates to 't' increment per frame
+                maxSpeed: isPlayer ? 0.0003 : 0.00028,
                 accel: 0.000002,
                 friction: 0.98,
-                handling: 0.05
+                handling: 0.05,
+                baseSpeed: 1.0,
+                nitro: NITRO_MAX,
+                nitroActive: false,
+                prevT: 0       // for wrong-way detection
             };
         }
 
@@ -667,6 +881,7 @@
                 if(key === 's' || key === 'arrowdown') keys.s = true;
                 if(key === 'a' || key === 'arrowleft') keys.a = true;
                 if(key === 'd' || key === 'arrowright') keys.d = true;
+                if(e.code === 'Space') { keys.space = true; e.preventDefault(); }
             });
             window.addEventListener('keyup', (e) => {
                 const key = e.key.toLowerCase();
@@ -674,6 +889,7 @@
                 if(key === 's' || key === 'arrowdown') keys.s = false;
                 if(key === 'a' || key === 'arrowleft') keys.a = false;
                 if(key === 'd' || key === 'arrowright') keys.d = false;
+                if(e.code === 'Space') keys.space = false;
             });
 
             // Mobile Touch Controls
@@ -681,6 +897,7 @@
             const btnRight = document.getElementById('btn-right');
             const btnAccel = document.getElementById('btn-accel');
             const btnBrake = document.getElementById('btn-brake');
+            const btnNitro = document.getElementById('btn-nitro');
 
             const addTouch = (el, keyName) => {
                 el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
@@ -691,13 +908,55 @@
             addTouch(btnRight, 'd');
             addTouch(btnAccel, 'w');
             addTouch(btnBrake, 's');
+            addTouch(btnNitro, 'space');
         }
 
         function startGame() {
             startScreen.style.display = 'none';
-            gameState = 'playing';
-            startTime = Date.now();
             resetRacers();
+            runCountdown();
+        }
+
+        function runCountdown() {
+            gameState = 'countdown';
+            countdownOverlay.style.display = 'flex';
+            let count = 3;
+
+            function tick() {
+                if (count > 0) {
+                    countdownNumber.textContent = count;
+                    countdownNumber.classList.remove('go');
+                } else {
+                    countdownNumber.textContent = 'GO!';
+                    countdownNumber.classList.add('go');
+                }
+                // Re-trigger CSS animation
+                countdownNumber.style.animation = 'none';
+                void countdownNumber.offsetWidth; // force reflow
+                countdownNumber.style.animation = '';
+
+                if (count === 0) {
+                    setTimeout(() => {
+                        countdownOverlay.style.display = 'none';
+                        gameState = 'playing';
+                        startTime = Date.now();
+                    }, 800);
+                } else {
+                    count--;
+                    setTimeout(tick, 1000);
+                }
+            }
+            tick();
+        }
+
+        function showLapNotification(lap) {
+            lapNotif.textContent = `LAP ${lap} / ${totalLaps}`;
+            lapNotif.style.display = 'block';
+            lapNotif.style.animation = 'none';
+            void lapNotif.offsetWidth;
+            lapNotif.style.animation = 'lap-flash 1.6s ease-out forwards';
+            if (lapNotifTimeout) clearTimeout(lapNotifTimeout);
+            lapNotifTimeout = setTimeout(() => { lapNotif.style.display = 'none'; }, 1600);
         }
 
         function onWindowResize() {
@@ -711,18 +970,30 @@
             if (gameState !== 'playing') return;
 
             // 1. Update Player
+            // Nitro logic
+            if (keys.space && playerCar.nitro > 0) {
+                playerCar.nitroActive = true;
+                playerCar.nitro = Math.max(0, playerCar.nitro - NITRO_DRAIN);
+            } else {
+                playerCar.nitroActive = false;
+                playerCar.nitro = Math.min(NITRO_MAX, playerCar.nitro + NITRO_REGEN);
+            }
+            const effectiveMaxSpeed = playerCar.nitroActive
+                ? playerCar.maxSpeed * NITRO_BOOST
+                : playerCar.maxSpeed;
+
             // Acceleration
-            if (keys.w) playerCar.speed += playerCar.accel;
+            if (keys.w) playerCar.speed += playerCar.accel * (playerCar.nitroActive ? 2.5 : 1);
             if (keys.s) playerCar.speed -= playerCar.accel * 1.5; // Stronger brake
             
             // Apply friction
             playerCar.speed *= playerCar.friction;
             
             // Limit speed
-            playerCar.speed = Math.max(-playerCar.maxSpeed * 0.3, Math.min(playerCar.maxSpeed, playerCar.speed));
+            playerCar.speed = Math.max(-effectiveMaxSpeed * 0.3, Math.min(effectiveMaxSpeed, playerCar.speed));
 
             // Steering (only steer when moving)
-            const speedRatio = playerCar.speed / playerCar.maxSpeed;
+            const speedRatio = playerCar.speed / effectiveMaxSpeed;
             if (Math.abs(playerCar.speed) > 0.00001) {
                 if (keys.a) playerCar.lateralSpeed -= playerCar.handling * Math.abs(speedRatio);
                 if (keys.d) playerCar.lateralSpeed += playerCar.handling * Math.abs(speedRatio);
@@ -730,19 +1001,31 @@
             playerCar.lateralSpeed *= 0.85; // lateral friction
             playerCar.theta += playerCar.lateralSpeed;
 
+            // Wrong-way detection
+            const goingBackwards = playerCar.speed < -0.00002;
+            wrongWay.style.display = goingBackwards ? 'block' : 'none';
+
             // Move forward
             updateRacerProgress(playerCar);
 
-            // 2. Update AI
+            // 2. Update AI — rubber-band to player + varied wandering
             aiCars = allRacers.filter(r => !r.isPlayer);
+            const playerProgress = (playerCar.lap - 1) + playerCar.t;
+            const now = Date.now();
             aiCars.forEach((ai, index) => {
-                // Simple AI: auto accelerate to its specific max speed
-                const targetSpeed = ai.maxSpeed * ai.baseSpeed;
-                if (ai.speed < targetSpeed) ai.speed += ai.accel * 0.8;
+                const aiProgress = (ai.lap - 1) + ai.t;
+                const gap = playerProgress - aiProgress;
+                // Rubber-band: speed up if AI is behind player, slow down if ahead
+                let rubberFactor = 1.0;
+                if (gap > 0.3)  rubberFactor = 1.08;  // AI is behind player — speed up
+                if (gap < -0.3) rubberFactor = 0.88;  // AI is ahead of player — slow down
+                const targetSpeed = ai.maxSpeed * ai.baseSpeed * rubberFactor;
+                if (ai.speed < targetSpeed) ai.speed += ai.accel * 0.9;
                 ai.speed *= ai.friction;
-                
-                // Very basic avoidance/wandering
-                ai.theta += Math.sin(Date.now() * 0.001 + index) * 0.01;
+                ai.speed = Math.min(ai.maxSpeed * 1.15, ai.speed);
+
+                // Smooth sinusoidal wandering inside tube
+                ai.theta += Math.sin(now * 0.0008 + index * 2.1) * 0.012;
 
                 updateRacerProgress(ai);
             });
@@ -753,12 +1036,9 @@
                     const r1 = allRacers[i];
                     const r2 = allRacers[j];
                     
-                    // Check distance in terms of 't' (along track) and 'theta' (around track)
                     const tDist = Math.abs(r1.t - r2.t);
-                    // Wrap around check for t is ignored here as carts are usually close, but good for robust logic
                     
                     if (tDist < 0.005 || tDist > 0.995) { // close along track
-                        // Check lateral distance
                         const thetaDist = Math.abs(r1.theta - r2.theta);
                         if (thetaDist < 0.3) { // close side-by-side
                             // Push away
@@ -767,8 +1047,8 @@
                             r2.lateralSpeed -= 0.02 * pushDir;
                             
                             // Slight speed penalty
-                            r1.speed *= 0.98;
-                            r2.speed *= 0.98;
+                            r1.speed *= 0.97;
+                            r2.speed *= 0.97;
                         }
                     }
                 }
@@ -777,19 +1057,42 @@
             // 4. Update 3D Positions based on t and theta
             allRacers.forEach(r => updateRacerPosition(r));
 
-            // 5. Update UI
+            // 5. Update exhaust glow lights
+            allRacers.forEach(r => {
+                const eLight = r.mesh.getObjectByName('exhaustLight');
+                if (eLight) {
+                    const base = 0.3 + Math.random() * 0.4;
+                    const speedScale = Math.max(0, r.speed / r.maxSpeed);
+                    eLight.intensity = speedScale * base * (r.nitroActive ? 4 : 1);
+                    eLight.color.setHex(r.nitroActive ? 0x00ffff : 0xff6600);
+                }
+                const bLight = r.mesh.getObjectByName('bodyGlow');
+                if (bLight && r.nitroActive) {
+                    bLight.intensity = 2 + Math.sin(Date.now() * 0.03) * 0.5;
+                    bLight.color.setHex(0x00ffff);
+                } else if (bLight) {
+                    bLight.intensity = r.isPlayer ? 1 : 0.4;
+                }
+            });
+
+            // 6. Update UI
             updateUI();
         }
 
         function updateRacerProgress(racer) {
+            racer.prevT = racer.t;
             racer.t += racer.speed;
 
             // Lap logic: Wrap cleanly between 0.0 and 1.0 to prevent Three.js Curve errors
             while (racer.t >= 1) {
                 racer.t -= 1;
                 racer.lap++;
-                if(racer.isPlayer && racer.lap > totalLaps) {
-                    endGame();
+                if (racer.isPlayer) {
+                    if (racer.lap > totalLaps) {
+                        endGame();
+                    } else {
+                        showLapNotification(racer.lap);
+                    }
                 }
             } 
             while (racer.t < 0) {
@@ -893,11 +1196,21 @@
 
         function updateUI() {
             // Speed (arbitrary multiplier to look like KM/H)
+            const effectiveMax = playerCar.nitroActive ? playerCar.maxSpeed * NITRO_BOOST : playerCar.maxSpeed;
             const speedDisplay = Math.abs(Math.floor(playerCar.speed * 800000));
             speedVal.innerText = speedDisplay;
             
-            const speedPercent = Math.min(100, (playerCar.speed / playerCar.maxSpeed) * 100);
+            const speedPercent = Math.min(100, (playerCar.speed / effectiveMax) * 100);
             speedBar.style.width = Math.max(0, speedPercent) + '%';
+
+            // Nitro bar
+            const nitroPercent = (playerCar.nitro / NITRO_MAX) * 100;
+            nitroFill.style.width = nitroPercent + '%';
+            if (playerCar.nitroActive) {
+                nitroContainer.classList.add('active');
+            } else {
+                nitroContainer.classList.remove('active');
+            }
 
             // Lap
             lapUI.innerText = `LAP ${Math.min(playerCar.lap, totalLaps)}/${totalLaps}`;
@@ -912,9 +1225,7 @@
             }
 
             // Position
-            // Calculate race progress: lap * trackLength + t * trackLength
-            const getProgress = (r) => r.lap * 100 + r.t;
-            
+            const getProgress = (r) => (r.lap - 1) * 1000 + r.t * 1000;
             const sortedRacers = [...allRacers].sort((a, b) => getProgress(b) - getProgress(a));
             const playerPos = sortedRacers.findIndex(r => r.isPlayer) + 1;
             
@@ -928,26 +1239,40 @@
 
         function endGame() {
             gameState = 'finished';
+            wrongWay.style.display = 'none';
             
-            // Calculate final position
-            const getProgress = (r) => r.lap * 100 + r.t;
+            const finishTime = timeUI.innerText;
+            const getProgress = (r) => (r.lap - 1) * 1000 + r.t * 1000;
             const sortedRacers = [...allRacers].sort((a, b) => getProgress(b) - getProgress(a));
             const playerPos = sortedRacers.findIndex(r => r.isPlayer) + 1;
 
             startScreen.style.display = 'flex';
             
-            let title = "RACE FINISHED!";
-            if(playerPos === 1) title = "VICTORY!";
-            
+            const medals = ['🥇', '🥈', '🥉', '4️⃣'];
+            const podiumRows = sortedRacers.map((r, i) => {
+                const isYou = r.isPlayer;
+                const color = isYou ? '#ffcc00' : '#ccc';
+                const weight = isYou ? 'bold' : 'normal';
+                return `<div class="results-row${isYou ? ' you' : ''}">
+                    ${medals[i]}  ${r.name}${isYou ? ' <span class="you-tag">(YOU)</span>' : ''}
+                </div>`;
+            }).join('');
+
+            const titleText = playerPos === 1 ? '🏆 VICTORY! 🏆' : 'RACE FINISHED!';
+            const titleSize  = playerPos === 1 ? '7vw' : '5vw';
+
             startScreen.innerHTML = `
-                <h1>${title}</h1>
-                <h2>You finished in Position ${playerPos}</h2>
-                <div style="font-size: 24px; color: #fff; margin-bottom: 30px;">Time: ${timeUI.innerText}</div>
+                <h1 style="font-size:${titleSize}">${titleText}</h1>
+                <h2>Position ${playerPos} of ${allRacers.length}</h2>
+                <div class="results-board">
+                    ${podiumRows}
+                </div>
+                <div class="results-time">⏱ Time: ${finishTime}</div>
                 <button class="btn" id="restart-btn">PLAY AGAIN</button>
             `;
 
             document.getElementById('restart-btn').addEventListener('click', () => {
-                location.reload(); // Simple reload to restart
+                location.reload();
             });
         }
 
@@ -957,16 +1282,14 @@
 
             if (gameState === 'playing') {
                 updatePhysics();
-            } else if (gameState === 'start' && playerCar) {
-                // Idle camera rotation on start screen
-                camera.position.x = Math.sin(Date.now() * 0.0005) * 50;
-                camera.position.z = Math.cos(Date.now() * 0.0005) * 50;
-                camera.position.y = 20;
-                camera.lookAt(0,0,0);
-            }
-
-            if (gameState === 'playing') {
                 updateCamera();
+            } else if ((gameState === 'start' || gameState === 'countdown') && playerCar) {
+                // Slowly orbit the start area while waiting
+                const t = Date.now() * 0.0004;
+                camera.position.x = Math.sin(t) * 80;
+                camera.position.z = Math.cos(t) * 80;
+                camera.position.y = 30 + Math.sin(t * 0.5) * 20;
+                camera.lookAt(scene.position);
             }
 
             renderer.render(scene, camera);
