@@ -340,6 +340,51 @@
             border-color: #00ff88;
             font-size: 18px;
         }
+
+        /* ===== PASTA SELECTION ===== */
+        .pasta-selection {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 16px 0;
+        }
+        .pasta-card {
+            background: rgba(0, 15, 40, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 12px 14px;
+            cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+            text-align: center;
+            min-width: 90px;
+            pointer-events: auto;
+        }
+        .pasta-card:hover { transform: scale(1.07); border-color: rgba(255, 200, 0, 0.5); }
+        .pasta-card.selected {
+            border-color: #ffcc00;
+            box-shadow: 0 0 18px rgba(255, 204, 0, 0.6);
+            background: rgba(0, 30, 80, 0.9);
+        }
+        .pasta-card .pasta-icon { font-size: 28px; margin-bottom: 5px; }
+        .pasta-card .pasta-name { font-size: 13px; color: #ffcc00; font-weight: bold; }
+        .pasta-card .pasta-desc { font-size: 10px; color: #aaa; margin-top: 2px; }
+        .pasta-card .pasta-stats { font-size: 10px; color: #00ffcc; margin-top: 4px; }
+        .section-label {
+            font-size: 13px; color: #00ffcc;
+            letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px;
+        }
+        .reward-badge {
+            background: linear-gradient(45deg, #ff6600, #ffcc00);
+            color: #000; padding: 4px 14px;
+            border-radius: 20px; font-size: 13px; font-weight: bold;
+            display: inline-block; margin: 6px 0;
+            animation: badge-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes badge-pulse {
+            0%, 100% { box-shadow: 0 0 8px rgba(255, 150, 0, 0.6); }
+            50%       { box-shadow: 0 0 20px rgba(255, 200, 0, 1); }
+        }
     </style>
     <!-- Include Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -396,6 +441,36 @@
     <div id="start-screen">
         <h1>Macaroni<br>Tube Racer</h1>
         <h2>Neon Pasta Power!</h2>
+        <div class="section-label">Choose Your Pasta Racer</div>
+        <div class="pasta-selection" id="pasta-selection">
+            <div class="pasta-card selected" data-pasta="macaroni">
+                <div class="pasta-icon">🍝</div>
+                <div class="pasta-name">Macaroni</div>
+                <div class="pasta-desc">Balanced &amp; Classic</div>
+                <div class="pasta-stats">SPD ●●●○ HDL ●●●○</div>
+            </div>
+            <div class="pasta-card" data-pasta="fusilli">
+                <div class="pasta-icon">🌀</div>
+                <div class="pasta-name">Fusilli</div>
+                <div class="pasta-desc">High Handling</div>
+                <div class="pasta-stats">SPD ●●○○ HDL ●●●●</div>
+            </div>
+            <div class="pasta-card" data-pasta="farfalle">
+                <div class="pasta-icon">🦋</div>
+                <div class="pasta-name">Farfalle</div>
+                <div class="pasta-desc">Fast Accelerator</div>
+                <div class="pasta-stats">SPD ●●●○ HDL ●●●○</div>
+            </div>
+            <div class="pasta-card" data-pasta="penne">
+                <div class="pasta-icon">⚡</div>
+                <div class="pasta-name">Penne</div>
+                <div class="pasta-desc">Maximum Speed</div>
+                <div class="pasta-stats">SPD ●●●● HDL ●●○○</div>
+            </div>
+        </div>
+        <div id="speed-reward-display" style="display:none; margin-bottom:6px;">
+            <span class="reward-badge">🏆 SPEED REWARD ACTIVE +15%</span>
+        </div>
         <button class="btn" id="start-btn">START RACE</button>
         <div class="controls-info">
             <p><span class="key">W</span> or <span class="key">↑</span> to Accelerate</p>
@@ -418,6 +493,24 @@
         let startTime = 0;
         let totalLaps = 3;
         let lapNotifTimeout = null;
+
+        // Pasta types: stats for each pasta racer
+        const PASTA_TYPES = {
+            macaroni: { name: 'Macaroni', maxSpeed: 0.0003,  accel: 0.000002,  handling: 0.05, bodyColor: 0xffcc22 },
+            fusilli:  { name: 'Fusilli',  maxSpeed: 0.00027, accel: 0.0000022, handling: 0.07, bodyColor: 0xffaa33 },
+            farfalle: { name: 'Farfalle', maxSpeed: 0.00032, accel: 0.0000028, handling: 0.05, bodyColor: 0xffdd55 },
+            penne:    { name: 'Penne',    maxSpeed: 0.00036, accel: 0.000002,  handling: 0.04, bodyColor: 0xffe8aa },
+        };
+        let selectedPasta = 'macaroni';
+        const SPEED_REWARD_KEY = 'macaroniRacerSpeedReward';
+        const SPEED_REWARD_BONUS = 1.15; // +15% speed when reward is active
+
+        // Audio system
+        let audioCtx = null;
+        let engineOsc = null;
+        let engineGain = null;
+        let nitroGain = null;
+        let audioReady = false;
 
         // Nitro constants
         const NITRO_MAX = 1.0;
@@ -478,27 +571,27 @@
             buildTrack();
 
             // 6. Create Racers
-            playerCar = createKart(0x0077ff, 0xff6600, true); // Blue/Orange player
+            playerCar = createKart(0x0077ff, 0xff6600, true, 'macaroni'); // default, updated on START
             playerCar.name = "Player";
             scene.add(playerCar.mesh);
             allRacers.push(playerCar);
 
-            // AI 1: Green/Yellow
-            const ai1 = createKart(0x00aa00, 0xffff00, false);
+            // AI 1: Green/Yellow — Fusilli
+            const ai1 = createKart(0x00aa00, 0xffff00, false, 'fusilli');
             ai1.name = "Spin";
-            ai1.baseSpeed = 0.85; // slightly slower max speed
+            ai1.baseSpeed = 0.85;
             scene.add(ai1.mesh);
             allRacers.push(ai1);
 
-            // AI 2: Red/White
-            const ai2 = createKart(0xcc0000, 0xffffff, false);
+            // AI 2: Red/White — Farfalle
+            const ai2 = createKart(0xcc0000, 0xffffff, false, 'farfalle');
             ai2.name = "Veloce";
             ai2.baseSpeed = 0.9;
             scene.add(ai2.mesh);
             allRacers.push(ai2);
 
-            // AI 3: Purple/Pink
-            const ai3 = createKart(0x6600cc, 0xff00ff, false);
+            // AI 3: Purple/Pink — Penne
+            const ai3 = createKart(0x6600cc, 0xff00ff, false, 'penne');
             ai3.name = "NoodleX";
             ai3.baseSpeed = 0.82;
             scene.add(ai3.mesh);
@@ -512,6 +605,15 @@
             setupInput();
 
             startBtn.addEventListener('click', startGame);
+
+            // 8. Pasta selection UI
+            setupPastaSelection();
+
+            // 9. Show speed reward badge if earned
+            if (localStorage.getItem(SPEED_REWARD_KEY) === 'true') {
+                const badge = document.getElementById('speed-reward-display');
+                if (badge) badge.style.display = 'block';
+            }
 
             // Start Loop
             animate();
@@ -718,7 +820,7 @@
             }
         }
 
-        function createKart(mainColor, accentColor, isPlayer) {
+        function createKart(mainColor, accentColor, isPlayer, pastaType = 'macaroni') {
             const group = new THREE.Group();
 
             // 1. Chassis (Formula style)
@@ -780,19 +882,13 @@
                 group.add(wheel);
             });
 
-            // 2. The Macaroni Driver
+            // 2. The Pasta Driver
             const macGroup = new THREE.Group();
-            
-            // Macaroni Body
-            const macGeo = new THREE.TubeGeometry(new MacaroniCurve(1.8), 20, 1.2, 16, false);
-            const macMat = new THREE.MeshStandardMaterial({ color: 0xffcc22, roughness: 0.5 }); // Pasta yellow
-            const macaroni = new THREE.Mesh(macGeo, macMat);
-            
-            // Rotate upright
-            macaroni.rotation.x = Math.PI / 2;
-            macaroni.rotation.y = -Math.PI / 2;
-            macaroni.position.set(0, 2, 0);
-            macGroup.add(macaroni);
+
+            // Choose pasta body shape based on type
+            const pastaBodyColor = (PASTA_TYPES[pastaType] || PASTA_TYPES.macaroni).bodyColor;
+            const pastaBody = createPastaBody(pastaType, pastaBodyColor);
+            macGroup.add(pastaBody);
 
             // Goggles
             const goggleMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
@@ -862,15 +958,195 @@
                 lap: 1,
                 isPlayer: isPlayer,
                 lateralSpeed: 0,
-                maxSpeed: isPlayer ? 0.0003 : 0.00028,
-                accel: 0.000002,
+                maxSpeed: isPlayer
+                    ? (PASTA_TYPES[pastaType] || PASTA_TYPES.macaroni).maxSpeed
+                      * (localStorage.getItem(SPEED_REWARD_KEY) === 'true' ? SPEED_REWARD_BONUS : 1.0)
+                    : 0.00028,
+                accel: isPlayer ? (PASTA_TYPES[pastaType] || PASTA_TYPES.macaroni).accel : 0.000002,
                 friction: 0.98,
-                handling: 0.05,
+                handling: isPlayer ? (PASTA_TYPES[pastaType] || PASTA_TYPES.macaroni).handling : 0.05,
                 baseSpeed: 1.0,
                 nitro: NITRO_MAX,
                 nitroActive: false,
                 prevT: 0       // for wrong-way detection
             };
+        }
+
+        // --- Pasta Shape Builders ---
+
+        function createPastaBody(type, color) {
+            switch (type) {
+                case 'fusilli':  return createFusilliShape(color);
+                case 'farfalle': return createFarfalleShape(color);
+                case 'penne':    return createPenneShape(color);
+                default: {
+                    // Macaroni (original bent-tube shape)
+                    const macGeo = new THREE.TubeGeometry(new MacaroniCurve(1.8), 20, 1.2, 16, false);
+                    const macMat = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
+                    const macaroni = new THREE.Mesh(macGeo, macMat);
+                    macaroni.rotation.x = Math.PI / 2;
+                    macaroni.rotation.y = -Math.PI / 2;
+                    macaroni.position.set(0, 2, 0);
+                    return macaroni;
+                }
+            }
+        }
+
+        function createFusilliShape(color) {
+            // Helical spiral tube
+            const pts = [];
+            for (let i = 0; i <= 40; i++) {
+                const t = i / 40;
+                const angle = t * Math.PI * 4; // two full turns
+                pts.push(new THREE.Vector3(
+                    Math.cos(angle) * 1.4,
+                    t * 5.5 - 2.75,
+                    Math.sin(angle) * 1.4
+                ));
+            }
+            const curve = new THREE.CatmullRomCurve3(pts);
+            const geo = new THREE.TubeGeometry(curve, 80, 0.45, 8, false);
+            const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(0, 2, 0);
+            return mesh;
+        }
+
+        function createFarfalleShape(color) {
+            // Bow-tie / butterfly shape
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4 });
+
+            // Left wing — wide cone
+            const leftGeo = new THREE.CylinderGeometry(0.25, 1.9, 0.5, 4);
+            leftGeo.rotateX(Math.PI / 2);
+            leftGeo.rotateZ(Math.PI / 4);
+            const left = new THREE.Mesh(leftGeo, mat);
+            left.position.set(-1.4, 0, 0);
+            left.scale.set(1, 1.5, 1);
+
+            // Right wing — mirrored
+            const rightGeo = new THREE.CylinderGeometry(0.25, 1.9, 0.5, 4);
+            rightGeo.rotateX(Math.PI / 2);
+            rightGeo.rotateZ(-Math.PI / 4);
+            const right = new THREE.Mesh(rightGeo, mat);
+            right.position.set(1.4, 0, 0);
+            right.scale.set(1, 1.5, 1);
+
+            // Center pinch knot
+            const centerGeo = new THREE.SphereGeometry(0.45, 8, 8);
+            const center = new THREE.Mesh(centerGeo, mat);
+
+            group.add(left, right, center);
+            group.position.set(0, 3, 0);
+            return group;
+        }
+
+        function createPenneShape(color) {
+            // Angled hollow tube — penne's signature diagonal cut
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.3, side: THREE.DoubleSide });
+
+            // Open cylinder for the tube body
+            const tubeGeo = new THREE.CylinderGeometry(1.1, 1.1, 5, 12, 1, true);
+            const tube = new THREE.Mesh(tubeGeo, mat);
+            tube.rotation.z = Math.PI / 5; // characteristic diagonal tilt
+
+            // Angled end-caps (ellipse planes)
+            const capMat = new THREE.MeshStandardMaterial({ color, roughness: 0.3, side: THREE.DoubleSide });
+            const capGeo = new THREE.CircleGeometry(1.1, 12);
+            const ang = Math.PI / 5;
+
+            const top = new THREE.Mesh(capGeo, capMat);
+            top.position.set(-Math.sin(ang) * 2.5, Math.cos(ang) * 2.5, 0);
+            top.rotation.z = ang;
+            top.rotation.x = Math.PI / 2;
+
+            const bottom = new THREE.Mesh(capGeo, capMat);
+            bottom.position.set(Math.sin(ang) * 2.5, -Math.cos(ang) * 2.5, 0);
+            bottom.rotation.z = ang;
+            bottom.rotation.x = Math.PI / 2;
+
+            group.add(tube, top, bottom);
+            group.position.set(0, 2.5, 0);
+            return group;
+        }
+
+        // --- Pasta Selection UI ---
+        function setupPastaSelection() {
+            const cards = document.querySelectorAll('.pasta-card');
+            cards.forEach(card => {
+                card.addEventListener('click', () => {
+                    cards.forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    selectedPasta = card.dataset.pasta;
+                });
+            });
+        }
+
+        // --- Audio System (Web Audio API) ---
+        function initAudio() {
+            if (audioReady) return;
+            audioReady = true;
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Main engine oscillator (sawtooth = raspy engine tone)
+                engineOsc = audioCtx.createOscillator();
+                engineOsc.type = 'sawtooth';
+                engineOsc.frequency.value = 80;
+
+                // Waveshaper distortion for a rougher engine sound
+                const distortion = audioCtx.createWaveShaper();
+                distortion.curve = makeDistortionCurve(180);
+                distortion.oversample = '2x';
+
+                engineGain = audioCtx.createGain();
+                engineGain.gain.value = 0.0; // start silent
+
+                engineOsc.connect(distortion);
+                distortion.connect(engineGain);
+                engineGain.connect(audioCtx.destination);
+                engineOsc.start();
+
+                // Nitro accent oscillator (high square wave burst)
+                const nitroOsc = audioCtx.createOscillator();
+                nitroOsc.type = 'square';
+                nitroOsc.frequency.value = 420;
+
+                nitroGain = audioCtx.createGain();
+                nitroGain.gain.value = 0.0;
+
+                nitroOsc.connect(nitroGain);
+                nitroGain.connect(audioCtx.destination);
+                nitroOsc.start();
+
+            } catch (e) {
+                // Audio unavailable — continue silently
+            }
+        }
+
+        function makeDistortionCurve(amount) {
+            const samples = 256;
+            const curve = new Float32Array(samples);
+            for (let i = 0; i < samples; i++) {
+                const x = (i * 2) / samples - 1;
+                curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+            }
+            return curve;
+        }
+
+        function updateEngineSound(speed, maxSpeed, nitroActive) {
+            if (!audioCtx || !engineOsc) return;
+            const ratio = Math.max(0, Math.abs(speed) / maxSpeed);
+            const idleFreq = 75;
+            const targetFreq = idleFreq + ratio * (nitroActive ? 520 : 300);
+            const t = audioCtx.currentTime;
+            engineOsc.frequency.setTargetAtTime(targetFreq, t, 0.08);
+            engineGain.gain.setTargetAtTime(0.025 + ratio * 0.055, t, 0.08);
+            if (nitroGain) {
+                nitroGain.gain.setTargetAtTime(nitroActive ? 0.018 : 0, t, 0.06);
+            }
         }
 
         // --- Input Handling ---
@@ -913,6 +1189,24 @@
 
         function startGame() {
             startScreen.style.display = 'none';
+
+            // Init audio on first user interaction
+            initAudio();
+
+            // Recreate player kart with the selected pasta type — dispose old resources first
+            playerCar.mesh.traverse(obj => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                }
+            });
+            scene.remove(playerCar.mesh);
+            playerCar = createKart(0x0077ff, 0xff6600, true, selectedPasta);
+            playerCar.name = "Player";
+            scene.add(playerCar.mesh);
+            allRacers[0] = playerCar;
+
             resetRacers();
             runCountdown();
         }
@@ -1076,6 +1370,7 @@
             });
 
             // 6. Update UI
+            updateEngineSound(playerCar.speed, playerCar.maxSpeed, playerCar.nitroActive);
             updateUI();
         }
 
@@ -1246,6 +1541,20 @@
             const sortedRacers = [...allRacers].sort((a, b) => getProgress(b) - getProgress(a));
             const playerPos = sortedRacers.findIndex(r => r.isPlayer) + 1;
 
+            // Grant speed reward for winning 1st place
+            const alreadyHadReward = localStorage.getItem(SPEED_REWARD_KEY) === 'true';
+            let rewardMsg = '';
+            if (playerPos === 1) {
+                localStorage.setItem(SPEED_REWARD_KEY, 'true');
+                if (!alreadyHadReward) {
+                    rewardMsg = `<div style="margin:10px 0;"><span class="reward-badge">🏆 NEW REWARD UNLOCKED: +15% Speed Boost!</span></div>`;
+                } else {
+                    rewardMsg = `<div style="margin:10px 0;"><span class="reward-badge">🏆 Speed Reward Active: +15%</span></div>`;
+                }
+            } else {
+                rewardMsg = `<div style="margin:10px 0; font-size:13px; color:#aaa;">Win 1st place to unlock the ⚡ Speed Reward!</div>`;
+            }
+
             startScreen.style.display = 'flex';
             
             const medals = ['🥇', '🥈', '🥉', '4️⃣'];
@@ -1268,6 +1577,7 @@
                     ${podiumRows}
                 </div>
                 <div class="results-time">⏱ Time: ${finishTime}</div>
+                ${rewardMsg}
                 <button class="btn" id="restart-btn">PLAY AGAIN</button>
             `;
 
