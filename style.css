@@ -1,0 +1,211 @@
+/* ============================================================
+   Macaroni Racer 3D  –  style.css
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0a0020;
+  overflow: hidden;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #fff;
+}
+
+#gameCanvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ── overlay ──────────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  background: rgba(10, 0, 32, 0.82);
+  backdrop-filter: blur(6px);
+}
+
+.overlay.hidden { display: none; }
+
+.overlay-box {
+  text-align: center;
+  padding: 2.5rem 3rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 24px;
+  box-shadow: 0 8px 40px rgba(0, 140, 255, 0.35);
+  max-width: 440px;
+  width: 90%;
+}
+
+.pasta-icon { font-size: 5rem; margin-bottom: 0.5rem; }
+
+h1 {
+  font-size: 2.8rem;
+  font-weight: 900;
+  background: linear-gradient(90deg, #ffdd57, #ff6b6b, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -1px;
+  margin-bottom: 0.4rem;
+}
+
+.subtitle {
+  font-size: 1.1rem;
+  color: #c8b8ff;
+  margin-bottom: 1.4rem;
+}
+
+.controls-info {
+  background: rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 0.9rem 1.2rem;
+  margin-bottom: 1.6rem;
+  font-size: 0.95rem;
+  line-height: 2;
+  color: #e2d9ff;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.85rem 2.2rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #ffdd57, #ff914d);
+  color: #1a0040;
+  box-shadow: 0 4px 18px rgba(255, 180, 50, 0.5);
+  transition: transform 0.15s, box-shadow 0.15s;
+  letter-spacing: 0.5px;
+}
+
+.btn:hover { transform: scale(1.06); box-shadow: 0 6px 24px rgba(255, 180, 50, 0.7); }
+.btn:active { transform: scale(0.97); }
+
+/* ── countdown ────────────────────────────────────────────── */
+#countdown-text {
+  font-size: clamp(6rem, 20vw, 14rem);
+  font-weight: 900;
+  color: #ffdd57;
+  text-shadow: 0 0 60px rgba(255, 220, 80, 0.8);
+  animation: countPulse 0.9s ease-out;
+}
+
+@keyframes countPulse {
+  from { transform: scale(1.8); opacity: 0.2; }
+  to   { transform: scale(1);   opacity: 1;   }
+}
+
+/* ── finish screen ────────────────────────────────────────── */
+#finish-emoji { font-size: 4rem; margin-bottom: 0.4rem; }
+
+h2 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  color: #ffdd57;
+}
+
+#finish-results {
+  font-size: 1rem;
+  line-height: 2;
+  color: #e2d9ff;
+  margin-bottom: 1.5rem;
+}
+
+.result-row { display: flex; gap: 0.6rem; justify-content: center; align-items: center; }
+.result-pos { font-weight: 900; font-size: 1.1rem; color: #ffdd57; width: 2rem; }
+.result-name { flex: 1; text-align: left; }
+
+/* ── HUD ──────────────────────────────────────────────────── */
+#hud {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  pointer-events: none;
+  z-index: 5;
+  padding: 14px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+#hud.hidden { display: none; }
+
+#hud-position {
+  font-size: 2rem;
+  font-weight: 900;
+  background: rgba(0,0,0,0.45);
+  padding: 6px 18px;
+  border-radius: 50px;
+  text-shadow: 0 0 12px rgba(255,220,80,0.7);
+  color: #ffdd57;
+}
+
+#hud-lap {
+  font-size: 1rem;
+  font-weight: 700;
+  background: rgba(0,0,0,0.45);
+  padding: 8px 14px;
+  border-radius: 50px;
+  color: #c8f0ff;
+  align-self: center;
+}
+
+#hud-speed {
+  font-size: 1rem;
+  font-weight: 700;
+  background: rgba(0,0,0,0.45);
+  padding: 8px 14px;
+  border-radius: 50px;
+  color: #c8ffcc;
+  align-self: center;
+}
+
+#hud-speedbar-wrap {
+  align-self: center;
+  width: 120px;
+  height: 10px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+#hud-speedbar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #44ff88, #ffdd57, #ff4444);
+  border-radius: 8px;
+  transition: width 0.1s;
+}
+
+#hud-names {
+  position: fixed;
+  right: 16px;
+  top: 14px;
+  background: rgba(0,0,0,0.45);
+  border-radius: 14px;
+  padding: 10px 16px;
+  font-size: 0.85rem;
+  line-height: 1.8;
+  min-width: 160px;
+  pointer-events: none;
+}
+
+/* ── mini-map backdrop ────────────────────────────────────── */
+#minimap-canvas {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-radius: 50%;
+  background: rgba(0,0,0,0.4);
+  z-index: 5;
+  pointer-events: none;
+}

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Macaroni Racer 3D 🍝</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- 3D canvas -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- HUD (shown during race) -->
+  <div id="hud" class="hidden">
+    <div id="hud-position">🏆 1st</div>
+    <div id="hud-lap">Lap 1 / 3</div>
+    <div id="hud-speed">0 km/h</div>
+    <div id="hud-speedbar-wrap">
+      <div id="hud-speedbar"></div>
+    </div>
+    <div id="hud-names"></div>
+  </div>
+
+  <!-- Start screen -->
+  <div id="start-screen" class="overlay">
+    <div class="overlay-box">
+      <div class="pasta-icon">🍝</div>
+      <h1>Macaroni Racer</h1>
+      <p class="subtitle">Race through the tubes!</p>
+      <div class="controls-info">
+        <p>⬆️ / ⬇️ &nbsp; Accelerate / Brake</p>
+        <p>⬅️ / ➡️ &nbsp; Steer left / right</p>
+      </div>
+      <button id="startBtn" class="btn">🏁 Start Race!</button>
+    </div>
+  </div>
+
+  <!-- Countdown overlay -->
+  <div id="countdown-screen" class="overlay hidden">
+    <div id="countdown-text">3</div>
+  </div>
+
+  <!-- Finish screen -->
+  <div id="finish-screen" class="overlay hidden">
+    <div class="overlay-box">
+      <div id="finish-emoji">🎉</div>
+      <h2 id="finish-title">Race Finished!</h2>
+      <div id="finish-results"></div>
+      <button id="restartBtn" class="btn">🔄 Race Again!</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
