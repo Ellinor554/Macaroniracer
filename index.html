@@ -341,6 +341,55 @@
             font-size: 18px;
         }
 
+        /* ===== REWARD NOTIFICATION ===== */
+        #reward-notification {
+            position: absolute;
+            top: 35%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Black Ops One', cursive;
+            font-size: 4vw;
+            color: #ffdd00;
+            text-shadow: 0 0 20px #ff9900, 0 0 40px #ff9900;
+            display: none;
+            pointer-events: none;
+            z-index: 20;
+            text-align: center;
+            white-space: nowrap;
+        }
+        @keyframes reward-pop {
+            0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            25%  { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            70%  { transform: translate(-50%, -50%) scale(1.0); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+        }
+
+        /* Active effect indicators */
+        #active-effects {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 15;
+            pointer-events: none;
+        }
+        .effect-badge {
+            background: rgba(0, 15, 40, 0.85);
+            border-radius: 8px;
+            padding: 5px 12px;
+            font-size: 13px;
+            color: #ffdd00;
+            border: 1px solid #ff9900;
+            box-shadow: 0 0 10px rgba(255, 153, 0, 0.5);
+            animation: effect-badge-in 0.3s ease-out;
+        }
+        @keyframes effect-badge-in {
+            from { transform: translateX(50px); opacity: 0; }
+            to   { transform: translateX(0); opacity: 1; }
+        }
+
         /* ===== PASTA SELECTION ===== */
         .pasta-selection {
             display: flex;
@@ -438,6 +487,12 @@
     <!-- Wrong-Way Indicator -->
     <div id="wrong-way">⚠ WRONG WAY ⚠</div>
 
+    <!-- Reward Notification -->
+    <div id="reward-notification"></div>
+
+    <!-- Active Effect Indicators -->
+    <div id="active-effects"></div>
+
     <div id="start-screen">
         <h1>Macaroni<br>Tube Racer</h1>
         <h2>Neon Pasta Power!</h2>
@@ -508,9 +563,28 @@
         // Audio system
         let audioCtx = null;
         let engineOsc = null;
+        let engineOsc2 = null;
+        let engineOsc2Gain = null;
         let engineGain = null;
+        let engineFilter = null;
+        let engineCompressor = null;
         let nitroGain = null;
         let audioReady = false;
+
+        // Reward system
+        let rewardItems = [];
+        const REWARD_COUNT = 10;
+        const REWARD_COLLECT_RADIUS = 14;    // 3D proximity in world units to collect a reward
+        const REWARD_RESPAWN_MS = 10000;     // ms before a collected reward respawns
+        const SPEED_BOOST_MULT = 1.4;        // +40% top speed (penne)
+        const HANDLING_BOOST_MULT = 1.5;     // +50% handling (farfalle)
+        const REWARD_TYPES = ['penne', 'fusilli', 'farfalle'];
+        const REWARD_EFFECTS = {
+            penne:    { label: '⚡ SPEED BOOST!',   color: '#ff6600', duration: 8000 },
+            fusilli:  { label: '🌀 NITRO FILLED!',  color: '#00ffcc', duration: 0    },
+            farfalle: { label: '🦋 HANDLING UP!',   color: '#ff88ff', duration: 8000 }
+        };
+        let activeEffects = {}; // keyed by effect type
 
         // Nitro constants
         const NITRO_MAX = 1.0;
@@ -609,7 +683,10 @@
             // 8. Pasta selection UI
             setupPastaSelection();
 
-            // 9. Show speed reward badge if earned
+            // 9. Spawn pasta reward items along the track
+            spawnRewards();
+
+            // 10. Show speed reward badge if earned
             if (localStorage.getItem(SPEED_REWARD_KEY) === 'true') {
                 const badge = document.getElementById('speed-reward-display');
                 if (badge) badge.style.display = 'block';
@@ -1072,6 +1149,218 @@
             return group;
         }
 
+        // --- Reward System ---
+        function createRewardPickupMesh(type) {
+            const group = new THREE.Group();
+            const colorMap = { penne: 0xff5500, fusilli: 0x00ffcc, farfalle: 0xff88ff };
+            const color = colorMap[type] || 0xffdd00;
+            const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6, roughness: 0.3 });
+
+            switch (type) {
+                case 'penne': {
+                    const tubeGeo = new THREE.CylinderGeometry(0.6, 0.6, 2.8, 10, 1, true);
+                    tubeGeo.rotateZ(Math.PI / 5);
+                    group.add(new THREE.Mesh(tubeGeo, mat));
+                    break;
+                }
+                case 'fusilli': {
+                    const pts = [];
+                    for (let i = 0; i <= 24; i++) {
+                        const s = i / 24;
+                        const a = s * Math.PI * 4;
+                        pts.push(new THREE.Vector3(Math.cos(a) * 0.65, s * 2.4 - 1.2, Math.sin(a) * 0.65));
+                    }
+                    const spiralGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, 0.22, 6, false);
+                    group.add(new THREE.Mesh(spiralGeo, mat));
+                    break;
+                }
+                case 'farfalle':
+                default: {
+                    const leftGeo = new THREE.CylinderGeometry(0.12, 0.9, 0.28, 4);
+                    leftGeo.rotateX(Math.PI / 2); leftGeo.rotateZ(Math.PI / 4);
+                    const left = new THREE.Mesh(leftGeo, mat);
+                    left.position.x = -0.65;
+                    const rightGeo = new THREE.CylinderGeometry(0.12, 0.9, 0.28, 4);
+                    rightGeo.rotateX(Math.PI / 2); rightGeo.rotateZ(-Math.PI / 4);
+                    const right = new THREE.Mesh(rightGeo, mat);
+                    right.position.x = 0.65;
+                    const ctr = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), mat);
+                    group.add(left, right, ctr);
+                    break;
+                }
+            }
+
+            // Glow light so rewards are visible from a distance
+            const glow = new THREE.PointLight(color, 3, 20);
+            group.add(glow);
+
+            // Scale up to be visible inside the large tube
+            group.scale.set(2.8, 2.8, 2.8);
+            return group;
+        }
+
+        function placeRewardMesh(mesh, t, theta) {
+            const point = trackCurve.getPointAt(t);
+            const index = Math.floor(t * TRACK_SEGMENTS) % TRACK_SEGMENTS;
+            const n = trackFrames.normals[index].clone();
+            const b = trackFrames.binormals[index].clone();
+            // Near the tube wall — same radius zone as where racers drive
+            const offsetRadius = TRACK_RADIUS - 5;
+            const offset = new THREE.Vector3()
+                .addScaledVector(n, Math.cos(theta))
+                .addScaledVector(b, Math.sin(theta))
+                .multiplyScalar(offsetRadius);
+            mesh.position.copy(point).add(offset);
+        }
+
+        function spawnRewards() {
+            rewardItems.forEach(r => { if (r.mesh) scene.remove(r.mesh); });
+            rewardItems = [];
+            for (let i = 0; i < REWARD_COUNT; i++) {
+                // Spread evenly with slight jitter; avoid lap start/finish zone
+                const t = 0.06 + (i / REWARD_COUNT) * 0.88 + (Math.random() - 0.5) * 0.03;
+                const theta = Math.PI / 2 + (Math.random() - 0.5) * 2.0;
+                const type = REWARD_TYPES[i % REWARD_TYPES.length];
+                const mesh = createRewardPickupMesh(type);
+                placeRewardMesh(mesh, t, theta);
+                scene.add(mesh);
+                rewardItems.push({ mesh, t, theta, type, collected: false, respawnAt: null });
+            }
+        }
+
+        function checkRewardCollisions() {
+            if (gameState !== 'playing') return;
+            const now = Date.now();
+            rewardItems.forEach(reward => {
+                // Respawn after cooldown
+                if (reward.collected && reward.respawnAt && now >= reward.respawnAt) {
+                    reward.collected = false;
+                    reward.respawnAt = null;
+                    reward.t = Math.random() * 0.88 + 0.06;
+                    reward.theta = Math.PI / 2 + (Math.random() - 0.5) * 2.0;
+                    placeRewardMesh(reward.mesh, reward.t, reward.theta);
+                    reward.mesh.visible = true;
+                }
+                if (reward.collected) return;
+
+                // 3D distance check against player
+                if (reward.mesh.position.distanceTo(playerCar.mesh.position) < REWARD_COLLECT_RADIUS) {
+                    collectReward(playerCar, reward);
+                }
+            });
+
+            // Expire timed effects
+            if (activeEffects.speed && now > activeEffects.speed.endTime) {
+                playerCar.maxSpeed = activeEffects.speed.origMaxSpeed;
+                delete activeEffects.speed;
+                updateEffectsDisplay();
+            }
+            if (activeEffects.handling && now > activeEffects.handling.endTime) {
+                playerCar.handling = activeEffects.handling.origHandling;
+                delete activeEffects.handling;
+                updateEffectsDisplay();
+            }
+        }
+
+        function collectReward(racer, reward) {
+            reward.collected = true;
+            reward.mesh.visible = false;
+            reward.respawnAt = Date.now() + REWARD_RESPAWN_MS;
+            applyRewardEffect(racer, reward.type);
+            const info = REWARD_EFFECTS[reward.type];
+            showRewardNotification(info.label, info.color);
+            playPickupSound(reward.type);
+        }
+
+        function applyRewardEffect(racer, type) {
+            const now = Date.now();
+            switch (type) {
+                case 'penne': // +40% top speed for 8 s
+                    if (!activeEffects.speed) {
+                        activeEffects.speed = { origMaxSpeed: racer.maxSpeed };
+                    }
+                    racer.maxSpeed = activeEffects.speed.origMaxSpeed * SPEED_BOOST_MULT;
+                    activeEffects.speed.endTime = now + REWARD_EFFECTS.penne.duration;
+                    break;
+                case 'fusilli': // Instant full nitro refill
+                    racer.nitro = NITRO_MAX;
+                    break;
+                case 'farfalle': // +50% handling for 8 s
+                    if (!activeEffects.handling) {
+                        activeEffects.handling = { origHandling: racer.handling };
+                    }
+                    racer.handling = activeEffects.handling.origHandling * HANDLING_BOOST_MULT;
+                    activeEffects.handling.endTime = now + REWARD_EFFECTS.farfalle.duration;
+                    break;
+            }
+            updateEffectsDisplay();
+        }
+
+        function showRewardNotification(text, color) {
+            const el = document.getElementById('reward-notification');
+            if (!el) return;
+            el.textContent = text;
+            el.style.color = color;
+            el.style.textShadow = `0 0 20px ${color}, 0 0 40px ${color}`;
+            el.style.display = 'block';
+            el.style.animation = 'none';
+            void el.offsetWidth;
+            el.style.animation = 'reward-pop 1.8s ease-out forwards';
+            setTimeout(() => { el.style.display = 'none'; }, 1800);
+        }
+
+        function updateEffectsDisplay() {
+            const container = document.getElementById('active-effects');
+            if (!container) return;
+            container.innerHTML = '';
+            if (activeEffects.speed) {
+                const badge = document.createElement('div');
+                badge.className = 'effect-badge';
+                badge.textContent = '⚡ SPEED +40%';
+                container.appendChild(badge);
+            }
+            if (activeEffects.handling) {
+                const badge = document.createElement('div');
+                badge.className = 'effect-badge';
+                badge.style.borderColor = '#ff88ff';
+                badge.style.color = '#ff88ff';
+                badge.textContent = '🦋 HANDLING +50%';
+                container.appendChild(badge);
+            }
+        }
+
+        function playPickupSound(type) {
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
+                switch (type) {
+                    case 'penne':   // Rising glissando — speed boost
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(440, now);
+                        osc.frequency.linearRampToValueAtTime(880, now + 0.25);
+                        break;
+                    case 'fusilli': // Bright ascending sweep — nitro refill
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(660, now);
+                        osc.frequency.linearRampToValueAtTime(1320, now + 0.18);
+                        break;
+                    default:        // Sparkle — handling boost
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(880, now);
+                        osc.frequency.linearRampToValueAtTime(1760, now + 0.12);
+                        break;
+                }
+                gainNode.gain.setValueAtTime(0.18, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            } catch (e) { /* silent fail */ }
+        }
+
         // --- Pasta Selection UI ---
         function setupPastaSelection() {
             const cards = document.querySelectorAll('.pasta-card');
@@ -1091,33 +1380,60 @@
             try {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-                // Main engine oscillator (sawtooth = raspy engine tone)
+                // Dynamics compressor for a punchy, professional engine sound
+                engineCompressor = audioCtx.createDynamicsCompressor();
+                engineCompressor.threshold.value = -18;
+                engineCompressor.knee.value = 6;
+                engineCompressor.ratio.value = 10;
+                engineCompressor.attack.value = 0.003;
+                engineCompressor.release.value = 0.12;
+                engineCompressor.connect(audioCtx.destination);
+
+                // Low-pass filter that sweeps open as speed increases — "throttle up" effect
+                engineFilter = audioCtx.createBiquadFilter();
+                engineFilter.type = 'lowpass';
+                engineFilter.frequency.value = 350;
+                engineFilter.Q.value = 0.8;
+                engineFilter.connect(engineCompressor);
+
+                // Waveshaper distortion for engine rasp
+                const distortion = audioCtx.createWaveShaper();
+                distortion.curve = makeDistortionCurve(260);
+                distortion.oversample = '4x';
+                distortion.connect(engineFilter);
+
+                // Primary engine oscillator — sawtooth for rich harmonic content
                 engineOsc = audioCtx.createOscillator();
                 engineOsc.type = 'sawtooth';
-                engineOsc.frequency.value = 80;
-
-                // Waveshaper distortion for a rougher engine sound
-                const distortion = audioCtx.createWaveShaper();
-                distortion.curve = makeDistortionCurve(180);
-                distortion.oversample = '2x';
-
+                engineOsc.frequency.value = 52;
                 engineGain = audioCtx.createGain();
-                engineGain.gain.value = 0.0; // start silent
-
-                engineOsc.connect(distortion);
-                distortion.connect(engineGain);
-                engineGain.connect(audioCtx.destination);
+                engineGain.gain.value = 0.0;
+                engineOsc.connect(engineGain);
+                engineGain.connect(distortion);
                 engineOsc.start();
 
-                // Nitro accent oscillator (high square wave burst)
-                const nitroOsc = audioCtx.createOscillator();
-                nitroOsc.type = 'square';
-                nitroOsc.frequency.value = 420;
+                // Sub-harmonic oscillator — one octave lower for deep rumble
+                engineOsc2 = audioCtx.createOscillator();
+                engineOsc2.type = 'sawtooth';
+                engineOsc2.frequency.value = 26;
+                engineOsc2Gain = audioCtx.createGain();
+                engineOsc2Gain.gain.value = 0.0;
+                engineOsc2.connect(engineOsc2Gain);
+                engineOsc2Gain.connect(distortion);
+                engineOsc2.start();
 
+                // Nitro / turbo whine — high-pitched bandpass-filtered sawtooth
+                const nitroOsc = audioCtx.createOscillator();
+                nitroOsc.type = 'sawtooth';
+                nitroOsc.frequency.value = 1800;
+                const nitroFilter = audioCtx.createBiquadFilter();
+                nitroFilter.type = 'bandpass';
+                nitroFilter.frequency.value = 1800;
+                nitroFilter.Q.value = 4;
                 nitroGain = audioCtx.createGain();
                 nitroGain.gain.value = 0.0;
-
-                nitroOsc.connect(nitroGain);
+                nitroOsc.connect(nitroFilter);
+                nitroFilter.connect(nitroGain);
                 nitroGain.connect(audioCtx.destination);
                 nitroOsc.start();
 
@@ -1139,13 +1455,33 @@
         function updateEngineSound(speed, maxSpeed, nitroActive) {
             if (!audioCtx || !engineOsc) return;
             const ratio = Math.max(0, Math.abs(speed) / maxSpeed);
-            const idleFreq = 75;
-            const targetFreq = idleFreq + ratio * (nitroActive ? 520 : 300);
             const t = audioCtx.currentTime;
-            engineOsc.frequency.setTargetAtTime(targetFreq, t, 0.08);
-            engineGain.gain.setTargetAtTime(0.025 + ratio * 0.055, t, 0.08);
+
+            // Primary oscillator: 52 Hz idle → 440 Hz max (nitro: up to 700 Hz)
+            const idleFreq = 52;
+            const peakFreq = nitroActive ? 700 : 440;
+            const targetFreq = idleFreq + ratio * peakFreq;
+            engineOsc.frequency.setTargetAtTime(targetFreq, t, 0.05);
+
+            // Sub-harmonic: one octave below for deep rumble
+            if (engineOsc2) {
+                engineOsc2.frequency.setTargetAtTime(targetFreq * 0.5, t, 0.05);
+            }
+            if (engineOsc2Gain) {
+                engineOsc2Gain.gain.setTargetAtTime(0.012 + ratio * 0.04, t, 0.05);
+            }
+
+            // Main gain: louder and richer at high speed
+            engineGain.gain.setTargetAtTime(0.03 + ratio * 0.13, t, 0.05);
+
+            // Low-pass filter sweeps open as speed rises — sound "opens up" at high RPM
+            if (engineFilter) {
+                engineFilter.frequency.setTargetAtTime(280 + ratio * 2400 + (nitroActive ? 800 : 0), t, 0.06);
+            }
+
+            // Turbo/nitro high-pitched whine
             if (nitroGain) {
-                nitroGain.gain.setTargetAtTime(nitroActive ? 0.018 : 0, t, 0.06);
+                nitroGain.gain.setTargetAtTime(nitroActive ? 0.022 : 0, t, 0.04);
             }
         }
 
@@ -1192,6 +1528,12 @@
 
             // Init audio on first user interaction
             initAudio();
+
+            // Reset any lingering active effects from a previous race
+            if (activeEffects.speed) { playerCar.maxSpeed = activeEffects.speed.origMaxSpeed; }
+            if (activeEffects.handling) { playerCar.handling = activeEffects.handling.origHandling; }
+            activeEffects = {};
+            updateEffectsDisplay();
 
             // Recreate player kart with the selected pasta type — dispose old resources first
             playerCar.mesh.traverse(obj => {
@@ -1369,7 +1711,10 @@
                 }
             });
 
-            // 6. Update UI
+            // 6. Check pasta reward pickups
+            checkRewardCollisions();
+
+            // 7. Update UI
             updateEngineSound(playerCar.speed, playerCar.maxSpeed, playerCar.nitroActive);
             updateUI();
         }
@@ -1601,6 +1946,16 @@
                 camera.position.y = 30 + Math.sin(t * 0.5) * 20;
                 camera.lookAt(scene.position);
             }
+
+            // Animate reward items — spin and gently pulse in all game states
+            const nowMs = Date.now();
+            rewardItems.forEach((r, i) => {
+                if (!r.collected && r.mesh) {
+                    r.mesh.rotation.y = nowMs * 0.002 + i * 1.3;
+                    const pulse = 1 + Math.sin(nowMs * 0.003 + i * 0.8) * 0.08;
+                    r.mesh.scale.setScalar(2.8 * pulse);
+                }
+            });
 
             renderer.render(scene, camera);
         }
